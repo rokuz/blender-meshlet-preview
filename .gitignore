@@ -1,0 +1,17 @@
+# Native build artifacts (the wheel is committed, intermediates are not)
+native/build/
+*.o
+*.obj
+
+# Python
+__pycache__/
+*.pyc
+
+# Extension build output
+dist/
+
+# Editor / OS
+.DS_Store
+
+# Claude Code local settings
+.claude/

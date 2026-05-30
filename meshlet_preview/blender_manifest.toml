@@ -1,0 +1,32 @@
+schema_version = "1.0.0"
+
+id = "meshlet_preview"
+version = "0.1.0"
+name = "Meshlet Preview"
+tagline = "Split meshes into meshlets and preview GPU rendering problems"
+maintainer = "Roman Kuznetsov <r.kuznetsow@gmail.com>"
+type = "add-on"
+
+website = "https://github.com/rokuz/blender-meshlet-preview"
+
+tags = ["Mesh", "Development"]
+
+blender_version_min = "4.2.0"
+
+# The addon ships its own meshoptimizer code (the PyPI package does not expose
+# the meshlet builder); meshoptimizer is MIT, the addon code is GPL.
+license = [
+  "SPDX:GPL-3.0-or-later",
+  "SPDX:MIT",
+]
+copyright = [
+  "2026 Roman Kuznetsov",
+  "2016-2025 Arseny Kapoulkine",
+]
+
+# Native meshoptimizer shim, loaded via ctypes. One wheel per supported platform;
+# build the others with `python3 native/build_wheel.py` on each platform.
+platforms = ["macos-arm64"]
+wheels = [
+  "./wheels/meshopt_preview_native-0.1.0-py3-none-macosx_11_0_arm64.whl",
+]
