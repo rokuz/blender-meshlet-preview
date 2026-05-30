@@ -48,8 +48,15 @@ class VIEW3D_PT_meshlet_preview(bpy.types.Panel):
 
         stats = draw.get_stats(obj.name) if obj else None
         if stats:
+            row = layout.row(align=True)
+            row.operator("meshlet.pick", icon='EYEDROPPER')
+            sub = row.row(align=True)
+            sub.enabled = draw.get_selected(obj.name) >= 0
+            sub.operator("meshlet.deselect", text="", icon='X')
+
+            self._draw_selected(layout, draw.get_selected_info(obj.name))
             self._draw_stats(layout, stats)
-            layout.operator("meshlet.clear", icon='X', text="Clear Overlay")
+            layout.operator("meshlet.clear", icon='TRASH', text="Clear Overlay")
         elif obj and obj.type == 'MESH':
             layout.label(text="Press the button to build meshlets.", icon='INFO')
         else:
@@ -67,6 +74,19 @@ class VIEW3D_PT_meshlet_preview(bpy.types.Panel):
             box.label(text="green = ~1.0 · red = high overdraw", icon='COLOR')
         elif mode == 'ACMR':
             box.label(text="green = good order · red = cache misses", icon='COLOR')
+
+    def _draw_selected(self, layout, info):
+        if not info:
+            return
+        box = layout.box()
+        box.label(text=f"Meshlet #{info['id']}", icon='RESTRICT_SELECT_OFF')
+        col = box.column(align=True)
+        col.label(text=f"Vertices: {info['vertices']}")
+        col.label(text=f"Triangles: {info['triangles']}")
+        col.label(text=f"Fill: {info['fill'] * 100:.0f}%")
+        cone = "wide" if info['cone_cutoff'] >= 0.999 else "ok"
+        col.label(text=f"Cone cutoff: {info['cone_cutoff']:.2f}  ({cone})")
+        col.label(text=f"ACMR: {info['acmr']:.2f}   Overdraw: {info['overdraw']:.2f}")
 
     def _draw_stats(self, layout, stats):
         box = layout.box()

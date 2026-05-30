@@ -23,10 +23,10 @@ def main():
     print("meshoptimizer available:", meshopt.is_available(),
           "version:", meshopt.version() if meshopt.is_available() else "n/a")
 
+    # Reset first (disables any installed copy), then register this source tree.
+    bpy.ops.wm.read_factory_settings(use_empty=True)
     meshlet_preview.register()
 
-    # Clean scene + a reasonably dense mesh.
-    bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=4, radius=1.0)
     obj = bpy.context.active_object
     bpy.context.view_layer.objects.active = obj

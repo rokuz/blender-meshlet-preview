@@ -17,6 +17,7 @@ from gpu_extras.batch import batch_for_shader
 _cache = {}
 _handle = None
 _shader = None
+_wire_shader = None
 
 
 class _Entry:
@@ -25,20 +26,27 @@ class _Entry:
         "vertex_counts", "triangle_counts", "cone_cutoff", "acmr", "overdraw",
         "max_vertices", "max_triangles", "stats",
         "batch", "batch_key",
+        "tri_lookup", "selected", "wire_batch", "wire_key",
     )
 
     def __init__(self):
         self.batch = None
         self.batch_key = None
+        self.tri_lookup = None
+        self.selected = -1
+        self.wire_batch = None
+        self.wire_key = None
 
 
 # --------------------------------------------------------------------------- #
 # Cache management (called from the operator / UI)
 # --------------------------------------------------------------------------- #
 
-def set_result(obj_name, coords, tri_meshlet, result, max_vertices, max_triangles):
+def set_result(obj_name, coords, tri_meshlet, result, max_vertices, max_triangles,
+               tri_lookup=None):
     """Store a meshopt result and precompute the summary statistics."""
     e = _Entry()
+    e.tri_lookup = tri_lookup
     e.coords = np.ascontiguousarray(coords, dtype=np.float32).reshape(-1, 3)
     e.tri_meshlet = np.ascontiguousarray(tri_meshlet, dtype=np.uint32)
     e.vertex_counts = np.asarray(result.vertex_counts, dtype=np.float32)
@@ -92,6 +100,49 @@ def invalidate_batches():
     for e in _cache.values():
         e.batch = None
         e.batch_key = None
+
+
+def get_lookup(obj_name):
+    e = _cache.get(obj_name)
+    return e.tri_lookup if e else None
+
+
+def set_selected(obj_name, meshlet_id):
+    """Select a meshlet (or -1 to clear) and refresh the viewport."""
+    e = _cache.get(obj_name)
+    if e is None:
+        return
+    meshlet_id = int(meshlet_id)
+    if meshlet_id == e.selected:
+        return
+    e.selected = meshlet_id
+    e.wire_batch = None
+    e.wire_key = None
+    tag_redraw_all()
+
+
+def get_selected(obj_name):
+    e = _cache.get(obj_name)
+    return e.selected if e else -1
+
+
+def get_selected_info(obj_name):
+    """Per-meshlet metrics for the selected meshlet, or None."""
+    e = _cache.get(obj_name)
+    if e is None or e.selected < 0 or e.selected >= len(e.vertex_counts):
+        return None
+    m = e.selected
+    vc = float(e.vertex_counts[m])
+    tc = float(e.triangle_counts[m])
+    return {
+        "id": m,
+        "vertices": int(vc),
+        "triangles": int(tc),
+        "fill": max(vc / e.max_vertices, tc / e.max_triangles),
+        "cone_cutoff": float(e.cone_cutoff[m]),
+        "acmr": float(e.acmr[m]),
+        "overdraw": float(e.overdraw[m]),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -155,6 +206,62 @@ def _get_shader():
     return _shader
 
 
+def _get_wire_shader():
+    global _wire_shader
+    if _wire_shader is None:
+        _wire_shader = gpu.shader.from_builtin('POLYLINE_UNIFORM_COLOR')
+    return _wire_shader
+
+
+def _build_wire_batch(entry, shader):
+    """Line batch of the edges of the selected meshlet's triangles."""
+    idx = np.nonzero(entry.tri_meshlet == entry.selected)[0]
+    if len(idx) == 0:
+        return None
+    base = idx * 3
+    c0 = entry.coords[base]
+    c1 = entry.coords[base + 1]
+    c2 = entry.coords[base + 2]
+    lines = np.empty((len(idx) * 6, 3), dtype=np.float32)
+    lines[0::6], lines[1::6] = c0, c1   # edge 0-1
+    lines[2::6], lines[3::6] = c1, c2   # edge 1-2
+    lines[4::6], lines[5::6] = c2, c0   # edge 2-0
+    return batch_for_shader(shader, 'LINES', {"pos": lines})
+
+
+def _draw_selection(context):
+    """Second pass: bright wireframe over any selected meshlets."""
+    selected = [(n, e) for n, e in _cache.items() if e.selected is not None and e.selected >= 0]
+    if not selected:
+        return
+
+    region = context.region
+    shader = _get_wire_shader()
+    shader.bind()
+    if region is not None:
+        shader.uniform_float("viewportSize", (region.width, region.height))
+    shader.uniform_float("lineWidth", 2.5)
+    shader.uniform_float("color", (1.0, 1.0, 1.0, 1.0))
+
+    gpu.state.depth_test_set('LESS_EQUAL')
+    gpu.state.depth_mask_set(False)
+    for name, entry in selected:
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            continue
+        if entry.wire_batch is None or entry.wire_key != entry.selected:
+            entry.wire_batch = _build_wire_batch(entry, shader)
+            entry.wire_key = entry.selected
+        if entry.wire_batch is None:
+            continue
+        gpu.matrix.push()
+        try:
+            gpu.matrix.multiply_matrix(obj.matrix_world)
+            entry.wire_batch.draw(shader)
+        finally:
+            gpu.matrix.pop()
+
+
 def _draw():
     if not _cache:
         return
@@ -192,6 +299,8 @@ def _draw():
                 entry.batch.draw(shader)
             finally:
                 gpu.matrix.pop()
+
+        _draw_selection(context)
     finally:
         gpu.state.depth_mask_set(True)
         gpu.state.blend_set('NONE')
@@ -215,9 +324,10 @@ def register():
 
 
 def unregister():
-    global _handle, _shader
+    global _handle, _shader, _wire_shader
     if _handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_handle, 'WINDOW')
         _handle = None
     _cache.clear()
     _shader = None
+    _wire_shader = None

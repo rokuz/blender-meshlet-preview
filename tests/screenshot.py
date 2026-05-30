@@ -37,6 +37,20 @@ with bpy.context.temp_override(area=_area, region=_region, space_data=_space):
     bpy.ops.view3d.view_axis(type='FRONT')
     bpy.ops.view3d.view_selected()
 
+# Optional: highlight the front-facing meshlet (exercises the wireframe path).
+if "PICK" in argv:
+    from mathutils import Vector
+    from bl_ext.user_default import meshlet_preview as mp
+    draw, ops = mp.draw, mp.ops
+    dg = bpy.context.evaluated_depsgraph_get()
+    hit, loc, _n, idx, hobj, mat = bpy.context.scene.ray_cast(
+        dg, Vector((0.0, -5.0, 0.0)), Vector((0.0, 1.0, 0.0)))
+    if hit and hobj is not None:
+        m = ops._hit_to_meshlet(hobj, idx, loc, mat, hobj.original.name)
+        if m is not None:
+            draw.set_selected(hobj.original.name, m)
+            print("selected meshlet", m)
+
 _n = {"i": 0}
 
 

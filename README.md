@@ -29,6 +29,13 @@ The overlay is **non-destructive** — it is drawn with the `gpu` module and nev
 modifies your mesh data. It evaluates modifiers, so the preview matches what
 actually gets rendered.
 
+### Inspecting a single meshlet
+
+Press **Pick Meshlet** and click a meshlet in the viewport: it is outlined as a
+white wireframe and the panel shows that meshlet's vertex/triangle counts, fill,
+cone cutoff, ACMR and overdraw. Click empty space to deselect, `Esc` or
+right-click to finish picking (you can still orbit/zoom while picking).
+
 ## Installation
 
 ### From a release (recommended)
