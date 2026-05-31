@@ -315,8 +315,25 @@ def _draw_degenerate(context):
             gpu.matrix.pop()
 
 
+def _draw_selection_wires(shader, viewport, entry, alpha):
+    """Draw the selected meshlet's white outline (and red bad-triangle outline)
+    at the given opacity."""
+    shader.bind()
+    shader.uniform_float("viewportSize", viewport)
+    shader.uniform_float("lineWidth", 2.5)
+    shader.uniform_float("color", (1.0, 1.0, 1.0, alpha))
+    entry.wire_batch.draw(shader)
+    if entry.wire_bad_batch is not None:
+        shader.bind()
+        shader.uniform_float("viewportSize", viewport)
+        shader.uniform_float("lineWidth", 3.5)
+        shader.uniform_float("color", (1.0, 0.05, 0.05, alpha))
+        entry.wire_bad_batch.draw(shader)
+
+
 def _draw_selection(context):
-    """Second pass: bright wireframe over any selected meshlets."""
+    """X-ray the selected meshlet: a faint ghost through occluders plus a crisp
+    outline where it is actually visible."""
     selected = [(n, e) for n, e in _cache.items() if e.selected is not None and e.selected >= 0]
     if not selected:
         return
@@ -326,7 +343,6 @@ def _draw_selection(context):
     viewport = (region.width, region.height) if region is not None else (1.0, 1.0)
     offset = _depth_offset(context, _WIRE_BIAS)
 
-    gpu.state.depth_test_set('LESS_EQUAL')
     gpu.state.depth_mask_set(False)
     for name, entry in selected:
         obj = bpy.data.objects.get(name)
@@ -341,19 +357,12 @@ def _draw_selection(context):
             if offset is not None:
                 gpu.matrix.translate(offset)
             gpu.matrix.multiply_matrix(obj.matrix_world)
-            # White outline of the whole selected meshlet.
-            shader.bind()
-            shader.uniform_float("viewportSize", viewport)
-            shader.uniform_float("lineWidth", 2.5)
-            shader.uniform_float("color", (1.0, 1.0, 1.0, 1.0))
-            entry.wire_batch.draw(shader)
-            # Red, thicker outline of any degenerate/sliver triangles in it.
-            if entry.wire_bad_batch is not None:
-                shader.bind()
-                shader.uniform_float("viewportSize", viewport)
-                shader.uniform_float("lineWidth", 3.5)
-                shader.uniform_float("color", (1.0, 0.05, 0.05, 1.0))
-                entry.wire_bad_batch.draw(shader)
+            # Ghost pass: ignore depth so hidden parts show through other meshlets.
+            gpu.state.depth_test_set('NONE')
+            _draw_selection_wires(shader, viewport, entry, 0.3)
+            # Solid pass: crisp outline where the meshlet is actually visible.
+            gpu.state.depth_test_set('LESS_EQUAL')
+            _draw_selection_wires(shader, viewport, entry, 1.0)
         finally:
             gpu.matrix.pop()
 

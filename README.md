@@ -52,6 +52,10 @@ white wireframe and the panel shows that meshlet's vertex/triangle counts, fill,
 cone cutoff, ACMR and overdraw. Click empty space to deselect, `Esc` or
 right-click to finish picking (you can still orbit/zoom while picking).
 
+The selection is **x-rayed** — parts of the picked meshlet hidden behind other
+meshlets still show as a faint wireframe, so you can see its full extent (e.g.
+where a cluster wraps around to the back of the surface).
+
 ### Why cone culling matters (the red ears)
 
 A GPU mesh-shading pipeline can reject an *entire meshlet* before rasterizing it
