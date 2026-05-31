@@ -8,7 +8,7 @@
 // Everything is plain C linkage with pointer outputs (no struct-by-value
 // returns) so the ctypes binding stays trivial and ABI-robust.
 
-#include "meshoptimizer/meshoptimizer.h"
+#include "meshoptimizer/src/meshoptimizer.h"
 
 #include <cmath>
 #include <cstdlib>

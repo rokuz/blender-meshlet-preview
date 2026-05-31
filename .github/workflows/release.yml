@@ -36,6 +36,8 @@ jobs:
             platform: windows-x64
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive   # meshoptimizer source for the build
 
       - uses: actions/setup-python@v5
         with:

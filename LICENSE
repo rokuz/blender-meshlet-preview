@@ -22,6 +22,7 @@ SOFTWARE.
 
 ---
 
-This project bundles the meshoptimizer library (https://github.com/zeux/meshoptimizer),
-Copyright (c) 2016-2025 Arseny Kapoulkine, also under the MIT License. Its full
-notice is in native/meshoptimizer/LICENSE.meshoptimizer.txt.
+This project builds against the meshoptimizer library
+(https://github.com/zeux/meshoptimizer), Copyright (c) 2016-2025 Arseny
+Kapoulkine, also under the MIT License. It is included as a git submodule under
+native/meshoptimizer; its full notice is in native/meshoptimizer/LICENSE.md.

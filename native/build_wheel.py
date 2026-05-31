@@ -28,7 +28,8 @@ VERSION = "0.1.0"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT = os.path.dirname(HERE)
-MESHOPT_DIR = os.path.join(HERE, "meshoptimizer")
+# meshoptimizer is a git submodule (native/meshoptimizer); its sources live in src/.
+MESHOPT_DIR = os.path.join(HERE, "meshoptimizer", "src")
 SHIM = os.path.join(HERE, "mp_shim.cpp")
 BUILD = os.path.join(HERE, "build")
 WHEELS = os.path.join(PROJECT, "meshlet_preview", "wheels")

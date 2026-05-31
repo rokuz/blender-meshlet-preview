@@ -135,10 +135,12 @@ doesn't already exist; re-running with the same tag updates that release.
 ## How it is built
 
 meshoptimizer's public PyPI package does **not** expose the meshlet builder, so
-this project vendors the meshoptimizer MIT C source (`native/meshoptimizer/`)
-plus a thin C ABI shim (`native/mp_shim.cpp`) that runs the whole pipeline in one
-call. It is compiled to a shared library and called from Python via `ctypes`
-(`meshlet_preview/meshopt.py`), so it is independent of Blender's Python ABI.
+this project builds [meshoptimizer](https://github.com/zeux/meshoptimizer)
+(included as a git **submodule** at `native/meshoptimizer`, pinned to a release
+tag) together with a thin C ABI shim (`native/mp_shim.cpp`) that runs the whole
+pipeline in one call. It is compiled to a shared library and called from Python
+via `ctypes` (`meshlet_preview/meshopt.py`), so it is independent of Blender's
+Python ABI. Only the compiled binary ships in the extension — never the source.
 
 The library is delivered as a platform **wheel** bundled by the extension —
 the supported way to ship native code to
@@ -147,6 +149,7 @@ the supported way to ship native code to
 ### Build the native wheel
 
 ```sh
+git submodule update --init        # fetch meshoptimizer (first time only)
 python3 native/build_wheel.py
 ```
 
@@ -210,13 +213,14 @@ meshlet_preview/            the extension (uploadable to extensions.blender.org)
   meshopt.py                ctypes binding to the native shim
   wheels/                   bundled native wheel(s)
 native/
-  meshoptimizer/            vendored MIT source (v0.22)
+  meshoptimizer/            git submodule -> github.com/zeux/meshoptimizer (v1.1.1)
   mp_shim.cpp               C ABI shim over meshoptimizer
-  build_wheel.py            compiles the lib and packages the wheel
+  build_wheel.py            compiles the lib (+ submodule src/) and packages the wheel
+  package_extension.py      assembles the multi-platform extension zip
 tests/
 ```
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). The bundled meshoptimizer source is also MIT
-(see [`native/meshoptimizer/LICENSE.meshoptimizer.txt`](native/meshoptimizer/LICENSE.meshoptimizer.txt)).
+MIT — see [`LICENSE`](LICENSE). meshoptimizer (included as a submodule) is also
+MIT (see [`native/meshoptimizer/LICENSE.md`](native/meshoptimizer/LICENSE.md)).
