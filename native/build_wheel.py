@@ -24,7 +24,11 @@ import sysconfig
 import zipfile
 
 NAME = "meshopt_preview_native"
-VERSION = "0.1.0"
+# Track the bundled meshoptimizer release. Bumping this on every native change
+# is important: Blender's wheel manager keys on the wheel filename/version, so a
+# same-named wheel with new contents would NOT be reinstalled. Bump on shim
+# changes too.
+VERSION = "1.1.1"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT = os.path.dirname(HERE)
