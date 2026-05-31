@@ -118,24 +118,29 @@ class TestPicking(AddonTestCase):
         hit, loc, _n, idx, hobj, mat = bpy.context.scene.ray_cast(
             dg, Vector((0.0, 0.0, 5.0)), Vector((0.0, 0.0, -1.0)))
         self.assertTrue(hit)
-        m = ops._hit_to_meshlet(hobj, idx, loc, mat, hobj.original.name)
+        m = ops._hit_to_meshlet(hobj, idx, loc, mat, hobj.original.name, dg)
         self.assertIsNotNone(m)
         self.assertTrue(0 <= m < self.draw.get_stats(obj.name)["meshlet_count"])
 
-    def test_ngon_face_resolves_meshlet(self):
-        # A cube has quad (n-gon) faces -> exercises the n-gon pick branch.
+    def test_modified_mesh_resolves_meshlet(self):
+        # Subdivision Surface: ray_cast returns the original object but an index
+        # into the *evaluated* mesh; the pick must evaluate to resolve it. Also
+        # exercises the n-gon (quad) branch.
         from mathutils import Vector
         from meshlet_preview import ops
         obj = self.add_cube()
+        obj.modifiers.new("subsurf", 'SUBSURF').levels = 2
         self.recalc(obj)
         dg = bpy.context.evaluated_depsgraph_get()
         hit, loc, _n, idx, hobj, mat = bpy.context.scene.ray_cast(
             dg, Vector((0.3, 0.2, 5.0)), Vector((0.0, 0.0, -1.0)))
         self.assertTrue(hit)
-        self.assertGreater(len(hobj.to_mesh().polygons[idx].vertices), 3)
-        hobj.to_mesh_clear()
-        m = ops._hit_to_meshlet(hobj, idx, loc, mat, hobj.original.name)
+        # The evaluated mesh has many more polygons than the 6-quad base cube.
+        self.assertGreater(len(hobj.evaluated_get(dg).to_mesh().polygons), 6)
+        hobj.evaluated_get(dg).to_mesh_clear()
+        m = ops._hit_to_meshlet(hobj, idx, loc, mat, hobj.original.name, dg)
         self.assertIsNotNone(m)
+        self.assertTrue(0 <= m < self.draw.get_stats(obj.name)["meshlet_count"])
 
 
 if __name__ == "__main__":

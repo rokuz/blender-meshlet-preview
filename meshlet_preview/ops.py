@@ -107,12 +107,18 @@ def _point_in_triangle(p, a, b, c):
     return u >= -1e-4 and v >= -1e-4 and (u + v) <= 1.0 + 1e-4
 
 
-def _hit_to_meshlet(obj, poly_index, location, matrix, obj_name):
-    """Resolve a ray-cast hit (evaluated object + polygon + point) to a meshlet."""
+def _hit_to_meshlet(obj, poly_index, location, matrix, obj_name, depsgraph):
+    """Resolve a ray-cast hit to a meshlet.
+
+    ``scene.ray_cast`` returns the *original* object but a polygon index into
+    its *evaluated* mesh, so we must evaluate the object (apply modifiers) to
+    match the index and the lookup, which was built from the evaluated mesh.
+    """
     lookup = draw.get_lookup(obj_name)
     if lookup is None:
         return None
-    mesh = obj.to_mesh()
+    eval_obj = obj.evaluated_get(depsgraph)
+    mesh = eval_obj.to_mesh()
     try:
         polys = mesh.polygons
         if poly_index < 0 or poly_index >= len(polys):
@@ -139,7 +145,7 @@ def _hit_to_meshlet(obj, poly_index, location, matrix, obj_name):
                 return lookup.get(key)
         return fallback
     finally:
-        obj.to_mesh_clear()
+        eval_obj.to_mesh_clear()
 
 
 class MESHLET_OT_pick(bpy.types.Operator):
@@ -208,7 +214,7 @@ class MESHLET_OT_pick(bpy.types.Operator):
         if not draw.has_result(name):
             draw.set_selected(self._obj_name, -1)
             return
-        meshlet = _hit_to_meshlet(obj, index, location, matrix, name)
+        meshlet = _hit_to_meshlet(obj, index, location, matrix, name, depsgraph)
         draw.set_selected(name, meshlet if meshlet is not None else -1)
 
 
