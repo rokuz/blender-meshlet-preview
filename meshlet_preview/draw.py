@@ -12,12 +12,19 @@ import bpy
 import gpu
 import numpy as np
 from gpu_extras.batch import batch_for_shader
+from mathutils import Vector
 
 # obj_name -> _Entry
 _cache = {}
 _handle = None
 _shader = None
 _wire_shader = None
+
+# Depth bias (fraction of view distance) nudging the overlay toward the camera
+# to avoid z-fighting with the coplanar source mesh. Wireframes are pulled a bit
+# further so they sit on top of the fill.
+_FILL_BIAS = 0.0015
+_WIRE_BIAS = 0.0035
 
 
 class _Entry:
@@ -236,6 +243,17 @@ def _get_wire_shader():
     return _wire_shader
 
 
+def _depth_offset(context, factor):
+    """A world-space nudge toward the camera, scaled by view distance so it is
+    consistent at any zoom. Applied to the model matrix to keep the coplanar
+    overlay reliably in front of the source mesh (a polygon-offset stand-in)."""
+    rv3d = getattr(context, "region_data", None)
+    if rv3d is None:
+        return None
+    toward_camera = rv3d.view_rotation @ Vector((0.0, 0.0, 1.0))
+    return toward_camera * (rv3d.view_distance * factor)
+
+
 def _wire_batch_for(entry, tri_idx, shader):
     """Build a LINES batch of the edges of the given output triangles."""
     if len(tri_idx) == 0:
@@ -270,6 +288,7 @@ def _draw_degenerate(context):
     region = context.region
     shader = _get_wire_shader()
     viewport = (region.width, region.height) if region is not None else (1.0, 1.0)
+    offset = _depth_offset(context, _WIRE_BIAS)
 
     gpu.state.depth_test_set('LESS_EQUAL')
     gpu.state.depth_mask_set(False)
@@ -284,6 +303,8 @@ def _draw_degenerate(context):
             continue
         gpu.matrix.push()
         try:
+            if offset is not None:
+                gpu.matrix.translate(offset)
             gpu.matrix.multiply_matrix(obj.matrix_world)
             shader.bind()
             shader.uniform_float("viewportSize", viewport)
@@ -303,6 +324,7 @@ def _draw_selection(context):
     region = context.region
     shader = _get_wire_shader()
     viewport = (region.width, region.height) if region is not None else (1.0, 1.0)
+    offset = _depth_offset(context, _WIRE_BIAS)
 
     gpu.state.depth_test_set('LESS_EQUAL')
     gpu.state.depth_mask_set(False)
@@ -316,6 +338,8 @@ def _draw_selection(context):
             continue
         gpu.matrix.push()
         try:
+            if offset is not None:
+                gpu.matrix.translate(offset)
             gpu.matrix.multiply_matrix(obj.matrix_world)
             # White outline of the whole selected meshlet.
             shader.bind()
@@ -346,6 +370,8 @@ def _draw():
     shader = _get_shader()
     key = (st.view_mode, round(st.overlay_alpha, 3))
 
+    offset = _depth_offset(context, _FILL_BIAS)
+
     gpu.state.blend_set('ALPHA')
     gpu.state.depth_test_set('LESS_EQUAL')
     gpu.state.depth_mask_set(False)
@@ -366,6 +392,8 @@ def _draw():
 
             gpu.matrix.push()
             try:
+                if offset is not None:
+                    gpu.matrix.translate(offset)
                 gpu.matrix.multiply_matrix(obj.matrix_world)
                 shader.bind()
                 entry.batch.draw(shader)
