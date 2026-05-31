@@ -44,6 +44,7 @@ class VIEW3D_PT_meshlet_preview(bpy.types.Panel):
         row = col.row(align=True)
         row.prop(st, "show_overlay", toggle=True)
         row.prop(st, "overlay_alpha", text="Opacity", slider=True)
+        col.prop(st, "show_degenerate")
 
         self._draw_legend(layout, st.view_mode)
 

@@ -23,6 +23,11 @@ re-split after editing the mesh.
 | **Vertex Cache (ACMR)** | Per-meshlet average cache miss ratio (triangle ordering quality). |
 | **Geometry Quality** | Red where a meshlet has degenerate/sliver triangles (scale-invariant quality below the *Sliver Threshold*) or is spatially stringy (low compactness). Picking it outlines the offending triangles in red. |
 
+**Highlight Degenerate Triangles** (on by default) outlines *every* degenerate
+triangle in red across the whole mesh, in any view mode, without having to pick
+a meshlet — so bad faces are visible at a glance. Tune the *Sliver Threshold* to
+control how aggressive "degenerate" is.
+
 The panel also reports global statistics: meshlet count, average/min fill,
 percentage of wide cones, degenerate-triangle count, average/min compactness,
 ACMR, ATVR, overdraw and overfetch.

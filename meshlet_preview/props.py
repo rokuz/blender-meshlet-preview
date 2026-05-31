@@ -91,6 +91,13 @@ class MeshletPreviewSettings(PropertyGroup):
         default=0.75, min=0.0, max=1.0, subtype='FACTOR',
         update=_redraw,
     )
+    show_degenerate: BoolProperty(
+        name="Highlight Degenerate Triangles",
+        description="Always outline every degenerate/sliver triangle in red, "
+                    "in any view mode, without having to pick the meshlet",
+        default=True,
+        update=_redraw,
+    )
 
 
 def register():

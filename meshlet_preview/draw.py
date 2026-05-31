@@ -28,6 +28,7 @@ class _Entry:
         "degenerate_counts", "compactness", "tri_degenerate",
         "batch", "batch_key",
         "tri_lookup", "selected", "wire_batch", "wire_bad_batch", "wire_key",
+        "bad_batch",
     )
 
     def __init__(self):
@@ -38,6 +39,7 @@ class _Entry:
         self.wire_batch = None
         self.wire_bad_batch = None
         self.wire_key = None
+        self.bad_batch = None
 
 
 # --------------------------------------------------------------------------- #
@@ -258,6 +260,40 @@ def _build_wire_batches(entry, shader):
     entry.wire_key = entry.selected
 
 
+def _draw_degenerate(context):
+    """Always-on pass: outline every degenerate/sliver triangle in red."""
+    entries = [(n, e) for n, e in _cache.items()
+               if e.stats.get("degenerate_tris", 0) > 0]
+    if not entries:
+        return
+
+    region = context.region
+    shader = _get_wire_shader()
+    viewport = (region.width, region.height) if region is not None else (1.0, 1.0)
+
+    gpu.state.depth_test_set('LESS_EQUAL')
+    gpu.state.depth_mask_set(False)
+    for name, entry in entries:
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            continue
+        if entry.bad_batch is None:
+            idx = np.nonzero(entry.tri_degenerate != 0)[0]
+            entry.bad_batch = _wire_batch_for(entry, idx, shader)
+        if entry.bad_batch is None:
+            continue
+        gpu.matrix.push()
+        try:
+            gpu.matrix.multiply_matrix(obj.matrix_world)
+            shader.bind()
+            shader.uniform_float("viewportSize", viewport)
+            shader.uniform_float("lineWidth", 2.0)
+            shader.uniform_float("color", (1.0, 0.08, 0.0, 1.0))
+            entry.bad_batch.draw(shader)
+        finally:
+            gpu.matrix.pop()
+
+
 def _draw_selection(context):
     """Second pass: bright wireframe over any selected meshlets."""
     selected = [(n, e) for n, e in _cache.items() if e.selected is not None and e.selected >= 0]
@@ -336,6 +372,8 @@ def _draw():
             finally:
                 gpu.matrix.pop()
 
+        if st.show_degenerate:
+            _draw_degenerate(context)
         _draw_selection(context)
     finally:
         gpu.state.depth_mask_set(True)

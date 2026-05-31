@@ -26,6 +26,12 @@ st.cone_weight = 0.25
 st.view_mode = MODE
 st.show_overlay = True
 st.overlay_alpha = 0.9
+for tok in argv:                       # optional float token -> sliver threshold
+    try:
+        st.sliver_threshold = float(tok)
+        break
+    except ValueError:
+        pass
 
 _area = next(a for a in bpy.context.screen.areas if a.type == 'VIEW_3D')
 _region = next(r for r in _area.regions if r.type == 'WINDOW')
