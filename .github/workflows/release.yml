@@ -1,12 +1,19 @@
 name: Build & Release
 
 # Build the native meshoptimizer wheel on every supported platform, package the
-# extension zip, and publish it as a GitHub release when a v* tag is pushed.
+# extension zip, and publish it as a GitHub release. Triggered by pushing a v*
+# tag, or manually (a manual run also publishes a release; the tag defaults to
+# the manifest version, e.g. v0.1.0, unless overridden).
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (default: v<manifest version>)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -80,10 +87,27 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
+      - name: Determine release tag
+        id: rel
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            tag="${{ github.event.inputs.tag }}"
+            if [ -z "$tag" ]; then
+              ver=$(grep -E '^version' meshlet_preview/blender_manifest.toml \
+                    | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+              tag="v$ver"
+            fi
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Runs for tag pushes and for manual runs; on a manual run the tag is
+      # created at the current commit if it does not already exist.
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.rel.outputs.tag }}
           files: dist/*.zip
           generate_release_notes: true
           fail_on_unmatched_files: true

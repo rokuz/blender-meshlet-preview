@@ -126,8 +126,11 @@ Pushing a `v*` tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`) triggers
 `.github/workflows/release.yml`, which builds the native wheel on macOS arm64,
 macOS x64, Windows x64 and Linux x64 runners, runs `native/package_extension.py`
 to assemble a single multi-platform zip, and publishes it as a GitHub release.
-You can also run the workflow manually (*Actions → Build & Release → Run
-workflow*) to get the zip as a build artifact without releasing.
+
+Running the workflow manually (*Actions → Build & Release → Run workflow*) also
+publishes a release: the tag defaults to the manifest version (`v0.1.0`), or you
+can set a custom **tag** input. The tag is created at the chosen commit if it
+doesn't already exist; re-running with the same tag updates that release.
 
 ## How it is built
 
