@@ -21,9 +21,11 @@ re-split after editing the mesh.
 | **Cone Culling** | Normal-cone tightness. Red = wide/uncullable cone (can't be backface-cluster-culled). |
 | **Overdraw** | Per-meshlet overdraw ratio from meshoptimizer's software rasterizer. |
 | **Vertex Cache (ACMR)** | Per-meshlet average cache miss ratio (triangle ordering quality). |
+| **Geometry Quality** | Red where a meshlet has degenerate/sliver triangles (scale-invariant quality below the *Sliver Threshold*) or is spatially stringy (low compactness). Picking it outlines the offending triangles in red. |
 
 The panel also reports global statistics: meshlet count, average/min fill,
-percentage of wide cones, ACMR, ATVR, overdraw and overfetch.
+percentage of wide cones, degenerate-triangle count, average/min compactness,
+ACMR, ATVR, overdraw and overfetch.
 
 The overlay is **non-destructive** — it is drawn with the `gpu` module and never
 modifies your mesh data. It evaluates modifiers, so the preview matches what

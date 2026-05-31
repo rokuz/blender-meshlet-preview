@@ -10,6 +10,7 @@
 
 #include "meshoptimizer/meshoptimizer.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -31,16 +32,20 @@ struct mp_result {
 	float* radius;                 // meshlet_count
 	float* acmr;                   // per-meshlet average cache miss ratio
 	float* overdraw;               // per-meshlet overdraw ratio (>= 1.0)
+	unsigned int* degenerate_counts; // per-meshlet count of degenerate/sliver triangles
+	float* compactness;            // per-meshlet spatial compactness in [0,1] (1 = tight)
 
 	// Draw buffers (length == triangle_count and triangle_count*3).
 	unsigned int* tri_meshlet;     // meshlet id for each output triangle
 	unsigned int* tri_indices;     // 3 original vertex indices per triangle
+	unsigned char* tri_degenerate; // 1 if the output triangle is degenerate/sliver
 
 	// Global statistics over the (optionally reordered) full index buffer.
 	float global_acmr;
 	float global_atvr;
 	float global_overdraw;
 	float global_overfetch;
+	unsigned int total_degenerate; // total degenerate/sliver triangles
 };
 
 void mp_free_result(mp_result* r);
@@ -52,6 +57,27 @@ static float* alloc_float(size_t n) {
 	return (float*)std::malloc(n * sizeof(float));
 }
 
+// Scale-invariant triangle quality: 1 for equilateral, ~0 for a sliver or a
+// zero-area (degenerate) triangle. q = 4*sqrt(3)*area / (sum of squared edges).
+static float triangle_quality(const float* p0, const float* p1, const float* p2,
+                              float* out_area) {
+	float e0[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+	float e1[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
+	float e2[3] = {p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]};
+	float cx = e0[1] * e1[2] - e0[2] * e1[1];
+	float cy = e0[2] * e1[0] - e0[0] * e1[2];
+	float cz = e0[0] * e1[1] - e0[1] * e1[0];
+	float area = 0.5f * std::sqrt(cx * cx + cy * cy + cz * cz);
+	float sumsq = (e0[0] * e0[0] + e0[1] * e0[1] + e0[2] * e0[2]) +
+	              (e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2]) +
+	              (e2[0] * e2[0] + e2[1] * e2[1] + e2[2] * e2[2]);
+	if (out_area)
+		*out_area = area;
+	if (sumsq <= 0.0f)
+		return 0.0f;
+	return (6.9282032302755f * area) / sumsq; // 4*sqrt(3) = 6.9282032...
+}
+
 // positions: vertex_count * 3 floats (object space, tightly packed)
 // indices:   index_count uints (triangle list)
 // Returns NULL on allocation failure or degenerate input.
@@ -59,7 +85,7 @@ mp_result* mp_build(
     const float* positions, unsigned int vertex_count,
     const unsigned int* indices, unsigned int index_count,
     unsigned int max_vertices, unsigned int max_triangles, float cone_weight,
-    int optimize_first)
+    int optimize_first, float sliver_quality)
 {
 	if (!positions || !indices || index_count < 3 || vertex_count == 0)
 		return NULL;
@@ -111,15 +137,23 @@ mp_result* mp_build(
 	r->radius = alloc_float(count);
 	r->acmr = alloc_float(count);
 	r->overdraw = alloc_float(count);
+	r->degenerate_counts = alloc_uint(count);
+	r->compactness = alloc_float(count);
 	r->tri_meshlet = alloc_uint(total_tris);
 	r->tri_indices = alloc_uint(total_tris * 3);
+	r->tri_degenerate = (unsigned char*)std::malloc(total_tris);
 
 	if (!r->vertex_counts || !r->triangle_counts || !r->cone_cutoff ||
 	    !r->cone_axis || !r->center || !r->radius || !r->acmr ||
-	    !r->overdraw || !r->tri_meshlet || !r->tri_indices) {
+	    !r->overdraw || !r->degenerate_counts || !r->compactness ||
+	    !r->tri_meshlet || !r->tri_indices || !r->tri_degenerate) {
 		mp_free_result(r);
 		return NULL;
 	}
+
+	if (sliver_quality <= 0.0f)
+		sliver_quality = 0.02f;
+	r->total_degenerate = 0;
 
 	// Scratch buffer holding one meshlet's triangles expressed as original
 	// vertex indices; reused across meshlets for the per-meshlet analyzers.
@@ -134,8 +168,11 @@ mp_result* mp_build(
 		r->vertex_counts[m] = ml.vertex_count;
 		r->triangle_counts[m] = ml.triangle_count;
 
-		// Resolve local micro-indices to original vertex indices.
+		// Resolve local micro-indices to original vertex indices, and flag
+		// degenerate/sliver triangles + accumulate area for compactness.
 		local.resize(ml.triangle_count * 3);
+		unsigned int degenerate = 0;
+		float area_sum = 0.0f;
 		for (unsigned int t = 0; t < ml.triangle_count; ++t) {
 			unsigned int a = mv[mt[t * 3 + 0]];
 			unsigned int b = mv[mt[t * 3 + 1]];
@@ -144,12 +181,22 @@ mp_result* mp_build(
 			local[t * 3 + 1] = b;
 			local[t * 3 + 2] = c;
 
+			float area = 0.0f;
+			float q = triangle_quality(&positions[a * 3], &positions[b * 3],
+			                           &positions[c * 3], &area);
+			area_sum += area;
+			unsigned char bad = (q < sliver_quality) ? 1 : 0;
+			degenerate += bad;
+
 			r->tri_meshlet[tri_cursor] = (unsigned int)m;
 			r->tri_indices[tri_cursor * 3 + 0] = a;
 			r->tri_indices[tri_cursor * 3 + 1] = b;
 			r->tri_indices[tri_cursor * 3 + 2] = c;
+			r->tri_degenerate[tri_cursor] = bad;
 			++tri_cursor;
 		}
+		r->degenerate_counts[m] = degenerate;
+		r->total_degenerate += degenerate;
 
 		meshopt_Bounds b = meshopt_computeMeshletBounds(
 		    mv, mt, ml.triangle_count, positions, vertex_count, vstride);
@@ -161,6 +208,13 @@ mp_result* mp_build(
 		r->center[m * 3 + 1] = b.center[1];
 		r->center[m * 3 + 2] = b.center[2];
 		r->radius[m] = b.radius;
+
+		// Compactness: a flat compact patch has area ~ pi*r^2, so
+		// sqrt(area/pi)/radius ~ 1; a stringy/scattered meshlet gives << 1.
+		float comp = 0.0f;
+		if (b.radius > 1e-8f)
+			comp = std::sqrt(area_sum / 3.14159265f) / b.radius;
+		r->compactness[m] = comp > 1.0f ? 1.0f : comp;
 
 		meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(
 		    local.data(), ml.triangle_count * 3, vertex_count, 16, 0, 0);
@@ -198,8 +252,11 @@ void mp_free_result(mp_result* r) {
 	std::free(r->radius);
 	std::free(r->acmr);
 	std::free(r->overdraw);
+	std::free(r->degenerate_counts);
+	std::free(r->compactness);
 	std::free(r->tri_meshlet);
 	std::free(r->tri_indices);
+	std::free(r->tri_degenerate);
 	std::free(r);
 }
 

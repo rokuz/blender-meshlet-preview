@@ -30,6 +30,7 @@ class VIEW3D_PT_meshlet_preview(bpy.types.Panel):
         col.prop(st, "max_triangles")
         col.prop(st, "cone_weight")
         col.prop(st, "optimize_first")
+        col.prop(st, "sliver_threshold")
 
         row = layout.row()
         row.scale_y = 1.4
@@ -74,6 +75,8 @@ class VIEW3D_PT_meshlet_preview(bpy.types.Panel):
             box.label(text="green = ~1.0 · red = high overdraw", icon='COLOR')
         elif mode == 'ACMR':
             box.label(text="green = good order · red = cache misses", icon='COLOR')
+        elif mode == 'GEOMETRY':
+            box.label(text="green = clean · red = slivers / stringy", icon='COLOR')
 
     def _draw_selected(self, layout, info):
         if not info:
@@ -87,6 +90,9 @@ class VIEW3D_PT_meshlet_preview(bpy.types.Panel):
         cone = "wide" if info['cone_cutoff'] >= 0.999 else "ok"
         col.label(text=f"Cone cutoff: {info['cone_cutoff']:.2f}  ({cone})")
         col.label(text=f"ACMR: {info['acmr']:.2f}   Overdraw: {info['overdraw']:.2f}")
+        col.label(text=f"Compactness: {info['compactness']:.2f}")
+        if info['degenerate']:
+            col.label(text=f"Degenerate tris: {info['degenerate']}", icon='ERROR')
 
     def _draw_stats(self, layout, stats):
         box = layout.box()
@@ -97,6 +103,13 @@ class VIEW3D_PT_meshlet_preview(bpy.types.Panel):
         col.label(text=f"Avg fill: {stats['avg_fill'] * 100:.0f}%  "
                        f"(min {stats['min_fill'] * 100:.0f}%)")
         col.label(text=f"Wide cones: {stats['wide_cone_pct']:.0f}%")
+        col.label(text=f"Compactness: avg {stats['avg_compactness']:.2f} "
+                       f"min {stats['min_compactness']:.2f}")
+        if stats['degenerate_tris']:
+            col.label(text=f"Degenerate: {stats['degenerate_tris']} tris "
+                           f"in {stats['degenerate_meshlets']} meshlets", icon='ERROR')
+        else:
+            col.label(text="Degenerate: none", icon='CHECKMARK')
         col.separator()
         col.label(text=f"ACMR: {stats['global_acmr']:.2f}   "
                        f"ATVR: {stats['global_atvr']:.2f}")

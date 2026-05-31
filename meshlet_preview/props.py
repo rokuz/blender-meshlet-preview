@@ -35,6 +35,9 @@ VIEW_MODE_ITEMS = (
      "Per-meshlet overdraw ratio from the software rasterizer; higher is worse"),
     ('ACMR', "Vertex Cache (ACMR)",
      "Per-meshlet average cache miss ratio; higher means poorer triangle ordering"),
+    ('GEOMETRY', "Geometry Quality",
+     "Red where a meshlet contains degenerate/sliver triangles or is spatially "
+     "stringy (low compactness)"),
 )
 
 
@@ -60,6 +63,13 @@ class MeshletPreviewSettings(PropertyGroup):
         description="Reorder triangles for vertex-cache and overdraw locality before "
                     "clustering; makes the cache/overdraw stats meaningful",
         default=True,
+    )
+    sliver_threshold: FloatProperty(
+        name="Sliver Threshold",
+        description="Triangle-quality cutoff for the Geometry Quality view; "
+                    "triangles below this (slivers / near-zero area) are flagged "
+                    "degenerate (0 = equilateral .. raise to catch thinner slivers)",
+        default=0.02, min=0.0, max=0.5, precision=3, subtype='FACTOR',
     )
 
     view_mode: EnumProperty(

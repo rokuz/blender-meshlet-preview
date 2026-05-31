@@ -56,7 +56,7 @@ def main():
 
     # Cycle every view mode and rebuild colors to exercise the colormaps.
     entry = draw._cache[obj.name]
-    for mode in ('PARTITION', 'FILL', 'CONE', 'OVERDRAW', 'ACMR'):
+    for mode in ('PARTITION', 'FILL', 'CONE', 'OVERDRAW', 'ACMR', 'GEOMETRY'):
         cols = draw._meshlet_colors(entry, mode)
         assert cols.shape == (stats["meshlet_count"], 3), (mode, cols.shape)
         assert cols.min() >= 0.0 and cols.max() <= 1.0, mode

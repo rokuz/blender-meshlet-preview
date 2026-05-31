@@ -62,7 +62,8 @@ class MESHLET_OT_recalculate(bpy.types.Operator):
                 max_vertices=st.max_vertices,
                 max_triangles=max_tri,
                 cone_weight=st.cone_weight,
-                optimize_first=st.optimize_first)
+                optimize_first=st.optimize_first,
+                sliver_quality=st.sliver_threshold)
         except meshopt.MeshletError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}

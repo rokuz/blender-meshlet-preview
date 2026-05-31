@@ -25,8 +25,9 @@ class _Entry:
         "coords", "tri_meshlet",
         "vertex_counts", "triangle_counts", "cone_cutoff", "acmr", "overdraw",
         "max_vertices", "max_triangles", "stats",
+        "degenerate_counts", "compactness", "tri_degenerate",
         "batch", "batch_key",
-        "tri_lookup", "selected", "wire_batch", "wire_key",
+        "tri_lookup", "selected", "wire_batch", "wire_bad_batch", "wire_key",
     )
 
     def __init__(self):
@@ -35,6 +36,7 @@ class _Entry:
         self.tri_lookup = None
         self.selected = -1
         self.wire_batch = None
+        self.wire_bad_batch = None
         self.wire_key = None
 
 
@@ -54,12 +56,16 @@ def set_result(obj_name, coords, tri_meshlet, result, max_vertices, max_triangle
     e.cone_cutoff = np.asarray(result.cone_cutoff, dtype=np.float32)
     e.acmr = np.asarray(result.acmr, dtype=np.float32)
     e.overdraw = np.asarray(result.overdraw, dtype=np.float32)
+    e.degenerate_counts = np.asarray(result.degenerate_counts, dtype=np.float32)
+    e.compactness = np.asarray(result.compactness, dtype=np.float32)
+    e.tri_degenerate = np.ascontiguousarray(result.tri_degenerate, dtype=np.uint8)
     e.max_vertices = float(max_vertices)
     e.max_triangles = float(max_triangles)
 
     fill = np.maximum(e.vertex_counts / e.max_vertices,
                       e.triangle_counts / e.max_triangles)
     wide = np.count_nonzero(e.cone_cutoff >= 0.999)
+    bad_meshlets = int(np.count_nonzero(e.degenerate_counts > 0))
     e.stats = {
         "meshlet_count": result.meshlet_count,
         "triangle_count": result.triangle_count,
@@ -67,6 +73,10 @@ def set_result(obj_name, coords, tri_meshlet, result, max_vertices, max_triangle
         "min_fill": float(fill.min()) if len(fill) else 0.0,
         "wide_cone_pct": (100.0 * wide / result.meshlet_count)
                          if result.meshlet_count else 0.0,
+        "degenerate_tris": result.total_degenerate,
+        "degenerate_meshlets": bad_meshlets,
+        "min_compactness": float(e.compactness.min()) if len(e.compactness) else 0.0,
+        "avg_compactness": float(e.compactness.mean()) if len(e.compactness) else 0.0,
         "global_acmr": result.global_acmr,
         "global_atvr": result.global_atvr,
         "global_overdraw": result.global_overdraw,
@@ -117,6 +127,7 @@ def set_selected(obj_name, meshlet_id):
         return
     e.selected = meshlet_id
     e.wire_batch = None
+    e.wire_bad_batch = None
     e.wire_key = None
     tag_redraw_all()
 
@@ -142,6 +153,8 @@ def get_selected_info(obj_name):
         "cone_cutoff": float(e.cone_cutoff[m]),
         "acmr": float(e.acmr[m]),
         "overdraw": float(e.overdraw[m]),
+        "degenerate": int(e.degenerate_counts[m]),
+        "compactness": float(e.compactness[m]),
     }
 
 
@@ -182,6 +195,14 @@ def _meshlet_colors(entry, mode):
         return _heat(entry.overdraw - 1.0)            # 1.0 good -> 2.0 worst
     if mode == 'ACMR':
         return _heat((entry.acmr - 0.5) / 2.0)        # 0.5 best -> 2.5 worst
+    if mode == 'GEOMETRY':
+        # Any degenerate triangle makes a meshlet at least orange (scaled by the
+        # fraction that is bad); low compactness (stringy meshlet) also pushes red.
+        frac = entry.degenerate_counts / np.maximum(entry.triangle_counts, 1.0)
+        deg_bad = np.where(entry.degenerate_counts > 0,
+                           np.clip(0.4 + frac, 0.0, 1.0), 0.0)
+        comp_bad = np.clip((0.5 - entry.compactness) / 0.5, 0.0, 1.0)
+        return _heat(np.maximum(deg_bad, comp_bad))
     return _partition_colors(len(entry.cone_cutoff))
 
 
@@ -213,20 +234,28 @@ def _get_wire_shader():
     return _wire_shader
 
 
-def _build_wire_batch(entry, shader):
-    """Line batch of the edges of the selected meshlet's triangles."""
-    idx = np.nonzero(entry.tri_meshlet == entry.selected)[0]
-    if len(idx) == 0:
+def _wire_batch_for(entry, tri_idx, shader):
+    """Build a LINES batch of the edges of the given output triangles."""
+    if len(tri_idx) == 0:
         return None
-    base = idx * 3
+    base = tri_idx * 3
     c0 = entry.coords[base]
     c1 = entry.coords[base + 1]
     c2 = entry.coords[base + 2]
-    lines = np.empty((len(idx) * 6, 3), dtype=np.float32)
+    lines = np.empty((len(tri_idx) * 6, 3), dtype=np.float32)
     lines[0::6], lines[1::6] = c0, c1   # edge 0-1
     lines[2::6], lines[3::6] = c1, c2   # edge 1-2
     lines[4::6], lines[5::6] = c2, c0   # edge 2-0
     return batch_for_shader(shader, 'LINES', {"pos": lines})
+
+
+def _build_wire_batches(entry, shader):
+    """White wireframe for the whole selected meshlet, red for its bad triangles."""
+    sel = entry.tri_meshlet == entry.selected
+    entry.wire_batch = _wire_batch_for(entry, np.nonzero(sel)[0], shader)
+    bad = np.nonzero(sel & (entry.tri_degenerate != 0))[0]
+    entry.wire_bad_batch = _wire_batch_for(entry, bad, shader)
+    entry.wire_key = entry.selected
 
 
 def _draw_selection(context):
@@ -237,11 +266,7 @@ def _draw_selection(context):
 
     region = context.region
     shader = _get_wire_shader()
-    shader.bind()
-    if region is not None:
-        shader.uniform_float("viewportSize", (region.width, region.height))
-    shader.uniform_float("lineWidth", 2.5)
-    shader.uniform_float("color", (1.0, 1.0, 1.0, 1.0))
+    viewport = (region.width, region.height) if region is not None else (1.0, 1.0)
 
     gpu.state.depth_test_set('LESS_EQUAL')
     gpu.state.depth_mask_set(False)
@@ -249,15 +274,26 @@ def _draw_selection(context):
         obj = bpy.data.objects.get(name)
         if obj is None:
             continue
-        if entry.wire_batch is None or entry.wire_key != entry.selected:
-            entry.wire_batch = _build_wire_batch(entry, shader)
-            entry.wire_key = entry.selected
+        if entry.wire_key != entry.selected:
+            _build_wire_batches(entry, shader)
         if entry.wire_batch is None:
             continue
         gpu.matrix.push()
         try:
             gpu.matrix.multiply_matrix(obj.matrix_world)
+            # White outline of the whole selected meshlet.
+            shader.bind()
+            shader.uniform_float("viewportSize", viewport)
+            shader.uniform_float("lineWidth", 2.5)
+            shader.uniform_float("color", (1.0, 1.0, 1.0, 1.0))
             entry.wire_batch.draw(shader)
+            # Red, thicker outline of any degenerate/sliver triangles in it.
+            if entry.wire_bad_batch is not None:
+                shader.bind()
+                shader.uniform_float("viewportSize", viewport)
+                shader.uniform_float("lineWidth", 3.5)
+                shader.uniform_float("color", (1.0, 0.05, 0.05, 1.0))
+                entry.wire_bad_batch.draw(shader)
         finally:
             gpu.matrix.pop()
 

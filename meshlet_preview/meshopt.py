@@ -34,12 +34,16 @@ class _MPResult(ctypes.Structure):
         ("radius", ctypes.POINTER(ctypes.c_float)),
         ("acmr", ctypes.POINTER(ctypes.c_float)),
         ("overdraw", ctypes.POINTER(ctypes.c_float)),
+        ("degenerate_counts", ctypes.POINTER(ctypes.c_uint)),
+        ("compactness", ctypes.POINTER(ctypes.c_float)),
         ("tri_meshlet", ctypes.POINTER(ctypes.c_uint)),
         ("tri_indices", ctypes.POINTER(ctypes.c_uint)),
+        ("tri_degenerate", ctypes.POINTER(ctypes.c_ubyte)),
         ("global_acmr", ctypes.c_float),
         ("global_atvr", ctypes.c_float),
         ("global_overdraw", ctypes.c_float),
         ("global_overfetch", ctypes.c_float),
+        ("total_degenerate", ctypes.c_uint),
     ]
 
 
@@ -60,8 +64,10 @@ class MeshletResult:
         "meshlet_count", "triangle_count",
         "vertex_counts", "triangle_counts", "cone_cutoff", "cone_axis",
         "center", "radius", "acmr", "overdraw",
-        "tri_meshlet", "tri_indices",
+        "degenerate_counts", "compactness",
+        "tri_meshlet", "tri_indices", "tri_degenerate",
         "global_acmr", "global_atvr", "global_overdraw", "global_overfetch",
+        "total_degenerate",
     )
 
 
@@ -70,18 +76,20 @@ _lib = None
 
 def _candidate_paths():
     """Yield possible shared-library locations, most preferred first."""
-    # 1. The bundled wheel package, importable once Blender installs the wheel.
-    try:
-        import meshopt_preview_native  # type: ignore
-        yield meshopt_preview_native.library_path()
-    except Exception:
-        pass
-    # 2. A local development build next to the source tree.
+    # 1. A local development build next to the source tree. Preferred so that
+    #    running from source always uses the freshly compiled library rather
+    #    than a possibly-stale installed wheel. (Absent in an installed add-on.)
     here = os.path.dirname(os.path.abspath(__file__))
     for name in ("libmeshopt_preview.dylib", "libmeshopt_preview.so",
                  "meshopt_preview.dll"):
         yield os.path.join(here, "..", "native", "build", name)
         yield os.path.join(here, name)
+    # 2. The bundled wheel package, importable once Blender installs the wheel.
+    try:
+        import meshopt_preview_native  # type: ignore
+        yield meshopt_preview_native.library_path()
+    except Exception:
+        pass
 
 
 def _load():
@@ -102,6 +110,7 @@ def _load():
             ctypes.POINTER(ctypes.c_float), ctypes.c_uint,
             ctypes.POINTER(ctypes.c_uint), ctypes.c_uint,
             ctypes.c_uint, ctypes.c_uint, ctypes.c_float, ctypes.c_int,
+            ctypes.c_float,
         ]
         lib.mp_free_result.restype = None
         lib.mp_free_result.argtypes = [ctypes.POINTER(_MPResult)]
@@ -144,6 +153,14 @@ def _copy_float(ptr, n):
     return list(ptr[:n])
 
 
+def _copy_u8(ptr, n):
+    if n == 0:
+        return _np.empty(0, dtype=_np.uint8) if _np is not None else []
+    if _np is not None:
+        return _np.ctypeslib.as_array(ptr, shape=(n,)).astype(_np.uint8, copy=True)
+    return list(ptr[:n])
+
+
 def _as_float_ptr(positions):
     """Return (ptr, count) for a flat sequence of float3 positions."""
     if _np is not None:
@@ -162,11 +179,13 @@ def _as_uint_ptr(indices):
 
 
 def build(positions, indices, max_vertices=64, max_triangles=124,
-          cone_weight=0.0, optimize_first=True):
+          cone_weight=0.0, optimize_first=True, sliver_quality=0.02):
     """Split a triangle mesh into meshlets and analyze it.
 
     ``positions`` is a flat sequence of float3 vertex coordinates (length
     ``vertex_count * 3``); ``indices`` is a flat triangle-list index buffer.
+    ``sliver_quality`` is the scale-invariant triangle-quality threshold below
+    which a triangle is flagged degenerate (0 = equilateral .. 1 worst).
     Returns a :class:`MeshletResult`.
     """
     lib = _load()
@@ -188,7 +207,8 @@ def build(positions, indices, max_vertices=64, max_triangles=124,
         pos_ptr, ctypes.c_uint(vertex_count),
         idx_ptr, ctypes.c_uint(idx_count),
         ctypes.c_uint(max_vertices), ctypes.c_uint(max_triangles),
-        ctypes.c_float(cone_weight), ctypes.c_int(1 if optimize_first else 0))
+        ctypes.c_float(cone_weight), ctypes.c_int(1 if optimize_first else 0),
+        ctypes.c_float(sliver_quality))
 
     if not res_ptr:
         raise MeshletError("Meshlet building failed (allocation or degenerate input).")
@@ -209,12 +229,16 @@ def build(positions, indices, max_vertices=64, max_triangles=124,
         out.radius = _copy_float(r.radius, mc)
         out.acmr = _copy_float(r.acmr, mc)
         out.overdraw = _copy_float(r.overdraw, mc)
+        out.degenerate_counts = _copy_uint(r.degenerate_counts, mc)
+        out.compactness = _copy_float(r.compactness, mc)
         out.tri_meshlet = _copy_uint(r.tri_meshlet, tc)
         out.tri_indices = _copy_uint(r.tri_indices, tc * 3)
+        out.tri_degenerate = _copy_u8(r.tri_degenerate, tc)
         out.global_acmr = float(r.global_acmr)
         out.global_atvr = float(r.global_atvr)
         out.global_overdraw = float(r.global_overdraw)
         out.global_overfetch = float(r.global_overfetch)
+        out.total_degenerate = int(r.total_degenerate)
         return out
     finally:
         lib.mp_free_result(res_ptr)

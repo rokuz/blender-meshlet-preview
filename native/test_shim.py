@@ -49,7 +49,25 @@ def main():
     assert mx < vcount, f"index {mx} out of range {vcount}"
     # Every triangle maps to a valid meshlet id.
     assert max(int(m) for m in r.tri_meshlet) < r.meshlet_count
+    # A clean grid has no degenerate triangles.
+    print(f"degenerate (grid): {r.total_degenerate}")
+    assert r.total_degenerate == 0
+
+    degenerate_case()
     print("OK")
+
+
+def degenerate_case():
+    """One healthy triangle + one zero-area (collinear) triangle."""
+    pos = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+           0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 2.0, 0.0, 0.0]
+    idx = [0, 1, 2, 3, 4, 5]
+    r = meshopt.build(pos, idx, max_vertices=64, max_triangles=124,
+                      optimize_first=False)
+    bad = [int(x) for x in r.tri_degenerate]
+    print(f"degenerate (sliver case): total={r.total_degenerate} flags={bad}")
+    assert r.total_degenerate == 1, r.total_degenerate
+    assert sum(bad) == 1
 
 
 if __name__ == "__main__":

@@ -32,9 +32,11 @@ _region = next(r for r in _area.regions if r.type == 'WINDOW')
 _space = _area.spaces.active
 _space.shading.type = 'SOLID'
 
+_view = next((a for a in argv if a in {'FRONT', 'TOP', 'RIGHT', 'LEFT', 'BACK', 'BOTTOM'}),
+             'FRONT')
 with bpy.context.temp_override(area=_area, region=_region, space_data=_space):
     bpy.ops.meshlet.recalculate()
-    bpy.ops.view3d.view_axis(type='FRONT')
+    bpy.ops.view3d.view_axis(type=_view)
     bpy.ops.view3d.view_selected()
 
 # Optional: highlight the front-facing meshlet (exercises the wireframe path).
