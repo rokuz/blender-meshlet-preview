@@ -64,6 +64,11 @@ class VIEW3D_PT_meshlet_preview(bpy.types.Panel):
         else:
             layout.label(text="Select a mesh object.", icon='INFO')
 
+        footer = layout.column()
+        footer.scale_y = 0.8
+        footer.enabled = False  # dimmed, informational
+        footer.label(text=f"meshoptimizer {meshopt.version_string()}")
+
     def _draw_legend(self, layout, mode):
         box = layout.box()
         if mode == 'PARTITION':

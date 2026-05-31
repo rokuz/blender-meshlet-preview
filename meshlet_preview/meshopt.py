@@ -137,6 +137,12 @@ def version():
     return _load().mp_version()
 
 
+def version_string():
+    """meshoptimizer version as a dotted string, e.g. "0.22"."""
+    v = version()
+    return f"{v // 1000}.{(v // 10) % 100}"
+
+
 def _copy_uint(ptr, n):
     if n == 0:
         return _np.empty(0, dtype=_np.uint32) if _np is not None else []
