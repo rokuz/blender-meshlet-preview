@@ -1,56 +1,54 @@
-"""Verify the *installed* extension works end-to-end (wheel-provided native lib).
+"""System test of the *installed* extension: the native library must load from
+the bundled wheel and the operator must run. Skipped unless the extension is
+installed in the Blender that runs this.
 
-    blender --background --python tests/test_installed.py
+    blender --background --python tests/run_blender.py
 """
-import addon_utils
-import bpy
+import unittest
+
+try:
+    import bpy
+    HAS_BPY = True
+except Exception:
+    HAS_BPY = False
 
 MODULE = "bl_ext.user_default.meshlet_preview"
 
 
-def main():
-    print("=== installed extension test ===")
+@unittest.skipUnless(HAS_BPY, "requires Blender (bpy)")
+class TestInstalledExtension(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import addon_utils
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        addon_utils.enable(MODULE, default_set=False, persistent=False)
+        if not hasattr(bpy.types.Scene, "meshlet_preview"):
+            raise unittest.SkipTest(f"{MODULE} is not installed")
+        cls._enabled = True
 
-    enabled = [m.__name__ for m in addon_utils.modules()
-               if m.__name__.endswith("meshlet_preview")]
-    print("found addon modules:", enabled)
+    @classmethod
+    def tearDownClass(cls):
+        if getattr(cls, "_enabled", False):
+            import addon_utils
+            addon_utils.disable(MODULE, default_set=False)
 
-    # Reset to an empty scene first; this also disables the session's addons,
-    # so enable the extension afterwards.
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    addon_utils.enable(MODULE, default_set=False, persistent=False)
-    assert hasattr(bpy.types.Scene, "meshlet_preview"), "addon failed to register"
+    def test_native_library_comes_from_wheel(self):
+        import meshopt_preview_native
+        path = meshopt_preview_native.library_path()
+        self.assertIn("site-packages", path)
+        self.assertTrue(path.endswith((".dylib", ".so", ".dll")))
 
-    # The native shim must come from the bundled wheel, not the source fallback.
-    import meshopt_preview_native
-    print("native package:", meshopt_preview_native.__file__)
-    print("library:", meshopt_preview_native.library_path())
-
-    mp = __import__(MODULE, fromlist=["meshopt"]).meshopt
-    print("meshoptimizer available:", mp.is_available(), "version:", mp.version())
-
-    bpy.ops.mesh.primitive_monkey_add()
-    obj = bpy.context.active_object
-    # Subdivide so there are enough triangles for several meshlets.
-    mod = obj.modifiers.new("subsurf", 'SUBSURF')
-    mod.levels = 2
-
-    bpy.context.view_layer.objects.active = obj
-    st = bpy.context.scene.meshlet_preview
-    st.view_mode = 'CONE'
-
-    with bpy.context.temp_override(active_object=obj, object=obj,
-                                   selected_objects=[obj]):
-        res = bpy.ops.meshlet.recalculate()
-    print("operator result:", res)
-    assert res == {'FINISHED'}
-
-    draw = __import__(MODULE, fromlist=["draw"]).draw
-    stats = draw.get_stats(obj.name)
-    print("stats:", stats)
-    assert stats and stats["meshlet_count"] > 0
-    print("=== PASS ===")
+    def test_operator_runs_via_installed_addon(self):
+        bpy.ops.mesh.primitive_monkey_add()
+        obj = bpy.context.active_object
+        obj.modifiers.new("subsurf", 'SUBSURF').levels = 2
+        bpy.context.view_layer.objects.active = obj
+        with bpy.context.temp_override(active_object=obj, object=obj,
+                                       selected_objects=[obj]):
+            self.assertEqual(bpy.ops.meshlet.recalculate(), {'FINISHED'})
+        draw = __import__(MODULE, fromlist=["draw"]).draw
+        self.assertGreater(draw.get_stats(obj.name)["meshlet_count"], 0)
 
 
 if __name__ == "__main__":
-    main()
+    unittest.main(verbosity=2)

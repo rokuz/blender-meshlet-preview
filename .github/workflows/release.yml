@@ -41,8 +41,8 @@ jobs:
       - name: Build native wheel
         run: python native/build_wheel.py
 
-      - name: Smoke test native library
-        run: python native/test_shim.py
+      - name: Run native unit tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
 
       - uses: actions/upload-artifact@v4
         with:

@@ -120,17 +120,27 @@ Remove*, or `blender --command extension remove ...`.
 
 ## Tests
 
+A `unittest` suite under `tests/` with discovery and per-case reporting:
+
+- `tests/test_native.py` — unit tests for the native shim + ctypes wrapper
+  (no Blender).
+- `tests/test_addon.py` — integration tests inside Blender (operator, view-mode
+  colormaps, meshlet picking incl. the n-gon branch). Auto-skipped when `bpy`
+  is unavailable.
+- `tests/test_installed.py` — system test of the installed extension (native
+  lib loaded from the bundled wheel). Skipped unless installed.
+
 ```sh
-# Native library only (no Blender)
-python3 native/test_shim.py
+# Native unit tests (no Blender). CI runs this on every platform.
+python3 -m unittest discover -s tests -p "test_*.py" -v
 
-# Inside Blender, from source
-blender --background --python tests/test_blender.py
+# Full suite inside Blender; exits non-zero on failure.
+blender --background --python tests/run_blender.py
+```
 
-# The installed extension (wheel-provided native lib)
-blender --background --python tests/test_installed.py
+Visual harness (manual GPU check; not assertions):
 
-# Visual: render each view mode to a PNG (GUI)
+```sh
 blender --background --python tests/make_scene.py
 blender /tmp/ml.blend --python tests/screenshot.py -- /tmp/ms_CONE.png CONE
 ```
