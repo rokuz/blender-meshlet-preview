@@ -52,6 +52,42 @@ white wireframe and the panel shows that meshlet's vertex/triangle counts, fill,
 cone cutoff, ACMR and overdraw. Click empty space to deselect, `Esc` or
 right-click to finish picking (you can still orbit/zoom while picking).
 
+### Why cone culling matters (the red ears)
+
+A GPU mesh-shading pipeline can reject an *entire meshlet* before rasterizing it
+— but only if it can prove **every** triangle in that meshlet faces away from
+the camera. To make that test cheap, meshoptimizer summarizes a meshlet's
+triangle normals as a **normal cone**: an average **axis** plus a **spread
+angle**.
+
+```
+   narrow cone (flat patch)          wide cone (curved patch / ear)
+        ↑ ↑ ↑                          ↖ ↑ ↗
+        | | |   normals ~parallel       ↙   ↘   normals point every which way
+        axis                           (no single "away" direction)
+```
+
+A meshlet is entirely back-facing only when the camera sits inside its
+"anti-cone" — and that anti-cone's half-angle is `90° − (normal-cone
+half-angle)`:
+
+- **Narrow cone** (flat region, e.g. a cheek): small normal spread → large
+  anti-cone → the cluster is provably back-facing from a wide range of angles →
+  culled often. **Green.**
+- **Wide cone** (high curvature, e.g. the **ears**): the surface curves through
+  a large arc, so the meshlet's normals point in many directions and the
+  anti-cone shrinks to nothing. From almost any viewpoint the cluster has some
+  triangles facing the camera and some facing away, so it can never be safely
+  rejected and is always rasterized. **Red.**
+
+meshoptimizer stores `cone_cutoff = sin(½·spread)` and, once the spread exceeds
+~84° (useless for culling), sets the sentinel `cone_cutoff = 1.0`. The **Cone
+Culling** view colors by it: ~0 (tight) → green, →1 (wide/sentinel) → red, and
+the panel reports the percentage of such wide cones. Practically, red marks
+where high curvature forces small, un-cullable clusters — reducing curvature
+there, or lowering `max_triangles`/`max_vertices` so meshlets stay flatter,
+shrinks the cones and turns red toward green.
+
 ## Installation
 
 ### From a release (recommended)
