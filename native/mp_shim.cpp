@@ -151,8 +151,8 @@ mp_result* mp_build(
 		return NULL;
 	}
 
-	if (sliver_quality <= 0.0f)
-		sliver_quality = 0.02f;
+	if (sliver_quality < 0.0f)  // 0 = detection off; negatives clamped
+		sliver_quality = 0.0f;
 	r->total_degenerate = 0;
 
 	// Scratch buffer holding one meshlet's triangles expressed as original

@@ -66,10 +66,11 @@ class MeshletPreviewSettings(PropertyGroup):
     )
     sliver_threshold: FloatProperty(
         name="Sliver Threshold",
-        description="Triangle-quality cutoff for the Geometry Quality view; "
-                    "triangles below this (slivers / near-zero area) are flagged "
-                    "degenerate (0 = equilateral .. raise to catch thinner slivers)",
-        default=0.02, min=0.0, max=0.5, precision=3, subtype='FACTOR',
+        description="Triangle-quality cutoff for degenerate detection; triangles "
+                    "below this quality (slivers / near-zero area) are flagged. "
+                    "0 = off, ~0.1 catches moderate slivers, higher is stricter "
+                    "(a clean equilateral triangle scores 1.0)",
+        default=0.1, min=0.0, max=0.5, precision=3, subtype='FACTOR',
     )
 
     view_mode: EnumProperty(

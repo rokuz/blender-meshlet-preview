@@ -179,7 +179,7 @@ def _as_uint_ptr(indices):
 
 
 def build(positions, indices, max_vertices=64, max_triangles=124,
-          cone_weight=0.0, optimize_first=True, sliver_quality=0.02):
+          cone_weight=0.0, optimize_first=True, sliver_quality=0.1):
     """Split a triangle mesh into meshlets and analyze it.
 
     ``positions`` is a flat sequence of float3 vertex coordinates (length
