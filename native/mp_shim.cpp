@@ -15,6 +15,14 @@
 #include <cstring>
 #include <vector>
 
+// Export the public C entry points. MSVC exports nothing from a DLL by default;
+// on macOS/Linux default visibility already exports them.
+#if defined(_WIN32)
+#define MP_EXPORT __declspec(dllexport)
+#else
+#define MP_EXPORT
+#endif
+
 extern "C" {
 
 struct mp_result {
@@ -48,7 +56,7 @@ struct mp_result {
 	unsigned int total_degenerate; // total degenerate/sliver triangles
 };
 
-void mp_free_result(mp_result* r);
+MP_EXPORT void mp_free_result(mp_result* r);
 
 static unsigned int* alloc_uint(size_t n) {
 	return (unsigned int*)std::malloc(n * sizeof(unsigned int));
@@ -81,7 +89,7 @@ static float triangle_quality(const float* p0, const float* p1, const float* p2,
 // positions: vertex_count * 3 floats (object space, tightly packed)
 // indices:   index_count uints (triangle list)
 // Returns NULL on allocation failure or degenerate input.
-mp_result* mp_build(
+MP_EXPORT mp_result* mp_build(
     const float* positions, unsigned int vertex_count,
     const unsigned int* indices, unsigned int index_count,
     unsigned int max_vertices, unsigned int max_triangles, float cone_weight,
@@ -241,7 +249,7 @@ mp_result* mp_build(
 	return r;
 }
 
-void mp_free_result(mp_result* r) {
+MP_EXPORT void mp_free_result(mp_result* r) {
 	if (!r)
 		return;
 	std::free(r->vertex_counts);
@@ -260,7 +268,7 @@ void mp_free_result(mp_result* r) {
 	std::free(r);
 }
 
-int mp_version(void) {
+MP_EXPORT int mp_version(void) {
 	return MESHOPTIMIZER_VERSION;
 }
 
