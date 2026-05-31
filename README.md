@@ -12,8 +12,10 @@ Built for **Blender 5.1.2** (Python 3.13); the manifest declares
 |:--:|:--:|
 | ![Meshlet partition](docs/images/partition.png) | ![Cone culling](docs/images/cone.png) |
 | **Meshlet partition** — one color per cluster | **Cone culling** — red ears are wide cones that can't be cluster-culled |
-| ![Geometry quality](docs/images/geometry.png) | ![Selected meshlet](docs/images/picked.png) |
-| **Geometry quality** — red sliver triangles flagged at the UV-sphere poles | **Click to select** — the picked meshlet's triangles outlined |
+| ![Fill efficiency](docs/images/fill.png) | ![Geometry quality](docs/images/geometry.png) |
+| **Fill efficiency** — green = meshlets packed near the vertex/triangle caps | **Geometry quality** — red sliver triangles flagged at the UV-sphere poles |
+| ![Selected meshlet](docs/images/picked.png) | ![Sidebar panel](docs/images/panel.png) |
+| **Click to select** — the picked meshlet's triangles outlined | **Sidebar panel** — parameters, view modes and per-meshlet stats |
 
 ## What it shows
 
