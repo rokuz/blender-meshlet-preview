@@ -213,7 +213,7 @@ native/
 tests/
 ```
 
-## Licenses
+## License
 
-Addon code: GPL-3.0-or-later. Bundled meshoptimizer: MIT (see
-`native/meshoptimizer/LICENSE.meshoptimizer.txt`).
+MIT — see [`LICENSE`](LICENSE). The bundled meshoptimizer source is also MIT
+(see [`native/meshoptimizer/LICENSE.meshoptimizer.txt`](native/meshoptimizer/LICENSE.meshoptimizer.txt)).

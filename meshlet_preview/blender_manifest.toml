@@ -13,10 +13,8 @@ tags = ["Mesh", "Development"]
 
 blender_version_min = "4.2.0"
 
-# The addon ships its own meshoptimizer code (the PyPI package does not expose
-# the meshlet builder); meshoptimizer is MIT, the addon code is GPL.
+# The addon code and the bundled meshoptimizer source are both MIT.
 license = [
-  "SPDX:GPL-3.0-or-later",
   "SPDX:MIT",
 ]
 copyright = [
